@@ -46,7 +46,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/OWNER/dsh-zhipu-status.git"
+    "url": "git+https://github.com/QIRSHENG/dsh-quota-pill.git"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "~4.1.0"

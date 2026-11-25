@@ -69,7 +69,7 @@ dsh plugin --profile web add link:E:\DeepSeek\dsh-zhipu-status
 ### 方式三：GitHub 仓库
 
 ```sh
-dsh plugin --profile web add github:OWNER/dsh-zhipu-status
+dsh plugin --profile web add github:QIRSHENG/dsh-quota-pill
 ```
 
 ### 官方桌面客户端（Electron / desktop profile）
