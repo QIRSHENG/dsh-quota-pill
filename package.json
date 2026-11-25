@@ -12,6 +12,7 @@
   "icon": "./icon.svg",
   "files": [
     "lib/index.js",
+    "lib/gateway.js",
     "lib/providers.js",
     "lib/client.js",
     "icon.svg",
@@ -21,7 +22,9 @@
   ],
   "scripts": {
     "build": "node scripts/build.mjs",
-    "smoke": "node scripts/build.mjs --smoke"
+    "smoke": "node scripts/build.mjs --smoke",
+    "smoke:gateway": "node scripts/gateway-smoke.mjs",
+    "smoke:lifecycle": "node scripts/lifecycle-check.mjs"
   },
   "engines": {
     "node": ">=20",

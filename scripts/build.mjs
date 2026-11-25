@@ -41,7 +41,7 @@ check('package.json parses, version + dsh manifest present', () => {
   if (packageJson.dsh.client.platform !== 'web') throw new Error('client platform must be web')
 })
 
-for (const file of ['lib/index.js', 'lib/client.js', 'lib/providers.js']) {
+for (const file of ['lib/index.js', 'lib/client.js', 'lib/providers.js', 'lib/gateway.js', 'scripts/gateway-smoke.mjs', 'scripts/lifecycle-check.mjs']) {
   await check(`syntax: ${file}`, () => {
     const result = spawnSync(process.execPath, ['--check', path.join(ROOT, file)], { encoding: 'utf8' })
     if (result.status !== 0) throw new Error(result.stderr || `exit ${result.status}`)
@@ -76,6 +76,10 @@ if (process.argv.includes('--smoke')) {
     for (const p of ['/dsh-zhipu-status/quota', '/dsh-zhipu-status/settings', '/dsh-zhipu-status/log']) {
       if (!routes.some((r) => r.path === p)) throw new Error(`route missing: ${p}`)
     }
+  })
+
+  await check('apply registers the gateway route', () => {
+    if (!routes.some((r) => r.path === '/dsh-zhipu-status/gateway')) throw new Error('route missing: /dsh-zhipu-status/gateway')
   })
 
   function fakeRes() {
@@ -177,6 +181,68 @@ if (process.argv.includes('--smoke')) {
     await assertEqual(weird.error, true, 'non-200 non-auth is generic error')
     await assertEqual(readEnvelope(null), null, 'null body → no envelope')
     await assertEqual(readEnvelope({ rows: [] }), null, 'envelope-less body → no envelope')
+  })
+
+  await check('gateway config normalization + key redaction', async () => {
+    const { normalizeGatewayConfig, redactGatewayConfig, mergeGatewayConfig, GATEWAY_PRESETS } = await import(pathToFileURL(path.join(ROOT, 'lib', 'gateway.js')).href)
+    const raw = normalizeGatewayConfig({
+      enabled: true, port: 0, chain: [
+        { id: 'a', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash', apiKey: 'sk-fake-secret' },
+        { baseUrl: 'https://api.deepseek.com', model: 'deepseek-chat', apiKey: 'sk-fake-two', enabled: false },
+        { baseUrl: 'not-a-url', model: 'x' },
+        { baseUrl: 'https://no-model.example', model: '' },
+      ],
+    })
+    await assertEqual(raw.port, 0, 'ephemeral port kept')
+    await assertEqual(raw.chain.length, 2, 'invalid entries dropped')
+    await assertEqual(raw.chain[0].envelope, 'zhipu', 'bigmodel.cn auto-detects the zhipu envelope')
+    await assertEqual(raw.chain[0].id, 'a', 'explicit id kept')
+    await assertEqual(raw.chain[1].id, 'provider-2', 'generated id')
+    await assertEqual(raw.chain[1].enabled, false, 'disabled flag kept')
+    const view = redactGatewayConfig(raw)
+    const text = JSON.stringify(view)
+    if (text.includes('sk-fake-secret') || text.includes('sk-fake-two')) throw new Error('apiKey leaked into the settings projection')
+    await assertEqual(view.chain[0].hasKey, true, 'hasKey true')
+    await assertEqual(view.chain[0].apiKey, undefined, 'apiKey omitted')
+    const merged = mergeGatewayConfig(raw, { chain: [{ id: 'a', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-plus' }] })
+    await assertEqual(merged.chain[0].apiKey, 'sk-fake-secret', 'keyless patch keeps the stored key')
+    await assertEqual(merged.chain[0].model, 'glm-4-plus', 'patch applied')
+    await assertEqual(GATEWAY_PRESETS.length >= 4, true, 'presets present')
+    await assertEqual(normalizeGatewayConfig(null).enabled, false, 'empty config stays disabled')
+  })
+
+  await check('gateway settings route persists and re-applies (SMOKE: no listener)', async () => {
+    const gatewayRoute = routes.find((r) => r.path === '/dsh-zhipu-status/gateway')
+    if (!gatewayRoute) throw new Error('gateway route missing')
+    const res = fakeRes()
+    await gatewayRoute.handler(fakeReq('GET'), res)
+    const before = JSON.parse(res.body)
+    await assertEqual(before.ok, true, 'ok')
+    await assertEqual(before.enabled, false, 'default disabled')
+    await assertEqual(before.virtualModel, 'auto-router', 'virtual model')
+    await assertEqual(before.status.listening, false, 'smoke must not bind a port')
+
+    const res2 = fakeRes()
+    await gatewayRoute.handler(fakeReq('POST', JSON.stringify({
+      enabled: true,
+      port: 18999,
+      chain: [{ id: 'zhipu', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash', apiKey: 'sk-smoke-fake' }],
+    })), res2)
+    const after = JSON.parse(res2.body)
+    await assertEqual(after.ok, true, 'ok')
+    await assertEqual(after.enabled, true, 'enabled persisted')
+    await assertEqual(after.port, 18999, 'port persisted')
+    await assertEqual(after.chain.length, 1, 'chain persisted')
+    await assertEqual(after.chain[0].hasKey, true, 'hasKey flag')
+    if (JSON.stringify(after).includes('sk-smoke-fake')) throw new Error('apiKey leaked in the POST response')
+    const saved = JSON.parse(fs.readFileSync(path.join(smokeHome, 'zhipu-status', 'gateway.json'), 'utf8'))
+    await assertEqual(saved.enabled, true, 'gateway.json enabled')
+    await assertEqual(saved.chain[0].apiKey, 'sk-smoke-fake', 'key persisted host-side only')
+    await assertEqual(after.status.listening, false, 'SMOKE still binds nothing')
+
+    const res3 = fakeRes()
+    await gatewayRoute.handler(fakeReq('DELETE'), res3)
+    await assertEqual(res3.statusCode, 405, 'non-GET/POST rejected')
   })
 
   console.log(`smoke DSH_HOME: ${smokeHome}`)
