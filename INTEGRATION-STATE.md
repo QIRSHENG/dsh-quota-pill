@@ -49,11 +49,11 @@
 
 ## 三、收尾清单
 
-- [x] 代码四改一合 + 全量验证绿
+- [x] 代码四改一合 + 全量验证绿（npm run verify = exit 0）
 - [x] commit 1：a9264c7 feat: neutralize to dsh-quota-pill + panel key chain + theme font + merged tabs
-- [ ] INTEGRATION-STATE 提交（commit 2）
-- [ ] desktop profile：remove dsh-zhipu-status → add link:E:\DeepSeek\dsh-zhipu-status → list 验证
-- [ ] push origin main（-c credential.helper=wincred）
+- [x] INTEGRATION-STATE 提交（commit 2：822ff83）
+- [x] desktop profile：`remove dsh-zhipu-status` → `add link:E:/DeepSeek/dsh-zhipu-status` → `list` 显示 `dsh-quota-pill@link:E:/DeepSeek/dsh-zhipu-status`（选了「目录不变、只改包名」路线；remove/add 一次通过，未触发目录改名备选）
+- [x] push origin main（-c credential.helper=wincred；`2086f71..822ff83 main -> main`）
 
 ## 四、边界（沿用纪律）
 
