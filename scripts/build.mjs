@@ -41,7 +41,7 @@ check('package.json parses, version + dsh manifest present', () => {
   if (packageJson.dsh.client.platform !== 'web') throw new Error('client platform must be web')
 })
 
-for (const file of ['lib/index.js', 'lib/client.js', 'lib/providers.js', 'lib/gateway.js', 'scripts/gateway-smoke.mjs', 'scripts/lifecycle-check.mjs']) {
+for (const file of ['lib/index.js', 'lib/client.js', 'lib/providers.js', 'lib/gateway.js', 'scripts/gateway-smoke.mjs', 'scripts/lifecycle-check.mjs', 'scripts/client-check.mjs']) {
   await check(`syntax: ${file}`, () => {
     const result = spawnSync(process.execPath, ['--check', path.join(ROOT, file)], { encoding: 'utf8' })
     if (result.status !== 0) throw new Error(result.stderr || `exit ${result.status}`)
