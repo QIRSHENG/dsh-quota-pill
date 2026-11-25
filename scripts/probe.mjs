@@ -41,7 +41,7 @@ console.log(`probe DSH_HOME: ${home}`)
 console.log(`probe key: ${FAKE_KEY} (fake)`)
 plugin.apply(fakeRoot)
 
-const quotaRoute = routes.find((r) => r.path === '/dsh-zhipu-status/quota')
+const quotaRoute = routes.find((r) => r.path === '/dsh-quota-pill/quota')
 
 const deadline = Date.now() + 90_000
 let snapshot = null
@@ -59,7 +59,7 @@ console.log(`final state: ${snapshot.state}`)
 console.log(`mode: ${snapshot.mode} | throttled: ${snapshot.throttled} | interval: ${snapshot.intervalMinutes}min`)
 console.log('--- debug.log (no secrets) ---')
 try {
-  console.log(fs.readFileSync(path.join(home, 'zhipu-status', 'debug.log'), 'utf8'))
+  console.log(fs.readFileSync(path.join(home, 'quota-pill', 'debug.log'), 'utf8'))
 } catch (err) {
   console.log(`(log read failed: ${err && err.message})`)
 }

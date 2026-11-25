@@ -1,7 +1,7 @@
 {
-  "name": "dsh-zhipu-status",
+  "name": "dsh-quota-pill",
   "version": "0.1.0",
-  "description": "Zhipu (GLM) token resource-pack balance as a DSH composer-dock pill, with a settings section. Data layer is a provider registry (v1 ships Zhipu only).",
+  "description": "AI quota pill for the DSH composer dock with a settings panel. Data layer is a provider registry (v1 ships Zhipu only).",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -27,7 +27,7 @@
     "smoke:lifecycle": "node scripts/lifecycle-check.mjs",
     "smoke:client": "node scripts/client-check.mjs",
     "smoke:stream": "node scripts/stream-check.mjs",
-    "verify": "node scripts/build.mjs --smoke && node scripts/gateway-smoke.mjs && node scripts/stream-check.mjs && node scripts/lifecycle-check.mjs && node scripts/client-check.mjs"
+    "verify": "node scripts/build.mjs --smoke && node scripts/gateway-smoke.mjs && node scripts/stream-check.mjs && node scripts/lifecycle-check.mjs && node scripts/migration-check.mjs && node scripts/client-check.mjs"
   },
   "engines": {
     "node": ">=20",
@@ -37,11 +37,10 @@
     "dsh",
     "dsh-plugin",
     "deepseek-harness",
-    "zhipu",
-    "glm",
-    "balance",
     "quota",
-    "status-bar"
+    "balance",
+    "status-bar",
+    "gateway"
   ],
   "license": "MIT",
   "repository": {

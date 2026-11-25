@@ -1,9 +1,10 @@
-# dsh-zhipu-status —— DSH bundle patch
+# dsh-quota-pill —— DSH bundle patch
 # 插件挂载声明：DSH 启动时按 bundle 层栈叠加各插件 patch，
 # 本行把宿主侧轮询/路由服务插入 profile 配置树。
-# 安装（web profile）：dsh plugin --profile web add dsh-zhipu-status
+# 安装（web profile）：dsh plugin --profile web add dsh-quota-pill
 # 本地开发安装：dsh plugin --profile web add link:<本目录绝对路径>
+# （安装目录沿用历史目录名，包名已是 dsh-quota-pill，见 README 说明）
 
 - insert:
-    - id: dsh-zhipu-status
-      name: dsh-zhipu-status
+    - id: dsh-quota-pill
+      name: dsh-quota-pill

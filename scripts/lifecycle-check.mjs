@@ -2,7 +2,7 @@
  * Lifecycle check — proves the host wiring (lib/index.js), not just the class:
  *
  *   start()        plugin start with gateway.json{enabled:true} → port bound
- *   applyConfig()  POST /dsh-zhipu-status/gateway → listener rebinds live
+ *   applyConfig()  POST /dsh-quota-pill/gateway → listener rebinds live
  *   stop()         plugin dispose → port released, nothing left running
  *
  * No network: the fake credentials service resolves null, so the poller lands
@@ -25,7 +25,7 @@ process.env.DSH_HOME = home
 delete process.env.DSHZ_SMOKE
 delete process.env.ZHIPU_API_KEY // the poller must find no key at all
 
-const dataDir = path.join(home, 'zhipu-status')
+const dataDir = path.join(home, 'quota-pill')
 fs.mkdirSync(dataDir, { recursive: true })
 fs.writeFileSync(path.join(dataDir, 'gateway.json'), JSON.stringify({
   enabled: true,
@@ -63,7 +63,7 @@ const fakeRoot = {
   inject(services, cb) { cb(fakeCtx) },
 }
 
-const gatewayRoute = () => routes.find((r) => r.path === '/dsh-zhipu-status/gateway')
+const gatewayRoute = () => routes.find((r) => r.path === '/dsh-quota-pill/gateway')
 
 function fakeRes() {
   return { statusCode: 0, headers: {}, body: null, setHeader(k, v) { this.headers[k] = v }, end(body) { this.body = body } }
@@ -125,7 +125,7 @@ await check('plugin start bound the gateway (enabled:true in gateway.json)', asy
 })
 
 let firstPort
-await check('POST /dsh-zhipu-status/gateway triggers applyConfig() — listener rebinds live', async () => {
+await check('POST /dsh-quota-pill/gateway triggers applyConfig() — listener rebinds live', async () => {
   const before = await readStatus()
   firstPort = before.status.port
   assert.ok(firstPort > 0, `no bound port before rebind: ${firstPort}`)

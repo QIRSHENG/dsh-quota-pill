@@ -31,7 +31,7 @@ async function assertEqual(actual, expected, label) {
   if (actual !== expected) throw new Error(`${label}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`)
 }
 
-console.log(`dsh-zhipu-status build @ ${ROOT}`)
+console.log(`dsh-quota-pill build @ ${ROOT}`)
 console.log(`node ${process.version}`)
 
 const packageJson = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
@@ -41,7 +41,7 @@ check('package.json parses, version + dsh manifest present', () => {
   if (packageJson.dsh.client.platform !== 'web') throw new Error('client platform must be web')
 })
 
-for (const file of ['lib/index.js', 'lib/client.js', 'lib/providers.js', 'lib/gateway.js', 'scripts/gateway-smoke.mjs', 'scripts/lifecycle-check.mjs', 'scripts/client-check.mjs', 'scripts/stream-check.mjs']) {
+for (const file of ['lib/index.js', 'lib/client.js', 'lib/providers.js', 'lib/gateway.js', 'scripts/gateway-smoke.mjs', 'scripts/lifecycle-check.mjs', 'scripts/client-check.mjs', 'scripts/stream-check.mjs', 'scripts/migration-check.mjs']) {
   await check(`syntax: ${file}`, () => {
     const result = spawnSync(process.execPath, ['--check', path.join(ROOT, file)], { encoding: 'utf8' })
     if (result.status !== 0) throw new Error(result.stderr || `exit ${result.status}`)
@@ -55,7 +55,7 @@ if (process.argv.includes('--smoke')) {
   const { default: plugin } = await import(pathToFileURL(path.join(ROOT, 'lib', 'index.js')).href)
   await check('module loads and exports apply()', () => {
     if (typeof plugin.apply !== 'function') throw new Error('apply missing')
-    if (plugin.name !== 'zhipu-status') throw new Error(`unexpected name ${plugin.name}`)
+    if (plugin.name !== 'quota-pill') throw new Error(`unexpected name ${plugin.name}`)
   })
 
   const routes = []
@@ -72,14 +72,14 @@ if (process.argv.includes('--smoke')) {
   }
   plugin.apply(fakeRoot)
 
-  await check('apply registers the three routes', () => {
-    for (const p of ['/dsh-zhipu-status/quota', '/dsh-zhipu-status/settings', '/dsh-zhipu-status/log']) {
+  await check('apply registers the four routes (quota/settings/key/log)', () => {
+    for (const p of ['/dsh-quota-pill/quota', '/dsh-quota-pill/settings', '/dsh-quota-pill/key', '/dsh-quota-pill/log']) {
       if (!routes.some((r) => r.path === p)) throw new Error(`route missing: ${p}`)
     }
   })
 
   await check('apply registers the gateway route', () => {
-    if (!routes.some((r) => r.path === '/dsh-zhipu-status/gateway')) throw new Error('route missing: /dsh-zhipu-status/gateway')
+    if (!routes.some((r) => r.path === '/dsh-quota-pill/gateway')) throw new Error('route missing: /dsh-quota-pill/gateway')
   })
 
   function fakeRes() {
@@ -97,8 +97,9 @@ if (process.argv.includes('--smoke')) {
     return req
   }
 
-  const quotaRoute = routes.find((r) => r.path === '/dsh-zhipu-status/quota')
-  const settingsRoute = routes.find((r) => r.path === '/dsh-zhipu-status/settings')
+  const quotaRoute = routes.find((r) => r.path === '/dsh-quota-pill/quota')
+  const settingsRoute = routes.find((r) => r.path === '/dsh-quota-pill/settings')
+  const keyRoute = routes.find((r) => r.path === '/dsh-quota-pill/key')
   const res1 = fakeRes()
   await quotaRoute.handler(fakeReq('GET'), res1)
   await check('GET /quota returns a starting snapshot (smoke mode: no timers)', async () => {
@@ -116,7 +117,7 @@ if (process.argv.includes('--smoke')) {
     const payload = JSON.parse(res2.body)
     await assertEqual(payload.ok, true, 'ok')
     await assertEqual(payload.intervalMinutes, 7, 'interval echo')
-    const saved = JSON.parse(fs.readFileSync(path.join(smokeHome, 'zhipu-status', 'config.json'), 'utf8'))
+    const saved = JSON.parse(fs.readFileSync(path.join(smokeHome, 'quota-pill', 'config.json'), 'utf8'))
     await assertEqual(saved.intervalMinutes, 7, 'config file')
   })
 
@@ -139,6 +140,64 @@ if (process.argv.includes('--smoke')) {
   await quotaRoute.handler({ method: 'GET', headers: { host: 'evil.example.com' } }, res5)
   await check('non-loopback Host without host fence is rejected (403)', async () => {
     await assertEqual(res5.statusCode, 403, 'status')
+  })
+
+  // ---- panel key chain: POST /key → GET quota projection (fake key only) ----
+  await check('POST /key with an empty string keeps the stored key (unchanged)', async () => {
+    const res = fakeRes()
+    await keyRoute.handler(fakeReq('POST', JSON.stringify({ apiKey: '' })), res)
+    const payload = JSON.parse(res.body)
+    await assertEqual(payload.ok, true, 'ok')
+    await assertEqual(payload.unchanged, true, 'unchanged flag')
+    await assertEqual(payload.hasKey, false, 'nothing stored yet')
+  })
+
+  await check('POST /key stores a fake key masked; GET /key + quota project hasKey + tail only', async () => {
+    const fake = 'fake-panel-key-ABCD4321'
+    const res = fakeRes()
+    await keyRoute.handler(fakeReq('POST', JSON.stringify({ apiKey: fake })), res)
+    const payload = JSON.parse(res.body)
+    await assertEqual(payload.ok, true, 'ok')
+    await assertEqual(payload.hasKey, true, 'hasKey')
+    await assertEqual(payload.maskedHint, '4321', 'masked tail')
+    const text = res.body
+    if (text.includes(fake)) throw new Error('apiKey leaked in the POST /key response')
+    const res2 = fakeRes()
+    await keyRoute.handler(fakeReq('GET'), res2)
+    const proj = JSON.parse(res2.body)
+    await assertEqual(proj.hasKey, true, 'GET hasKey')
+    await assertEqual(proj.maskedHint, '4321', 'GET masked tail')
+    if (JSON.stringify(proj).includes(fake)) throw new Error('apiKey leaked in the GET /key projection')
+    const res3 = fakeRes()
+    await quotaRoute.handler(fakeReq('GET'), res3)
+    const snap = JSON.parse(res3.body)
+    await assertEqual(snap.hasKey, true, 'quota hasKey')
+    await assertEqual(snap.maskedHint, '4321', 'quota maskedHint')
+    if (JSON.stringify(snap).includes(fake)) throw new Error('apiKey leaked in the quota snapshot')
+    const authRaw = fs.readFileSync(path.join(smokeHome, 'quota-pill', 'auth.json'), 'utf8')
+    if (authRaw.includes(fake)) throw new Error('plaintext apiKey written to auth.json')
+    const decoded = Buffer.from(JSON.parse(authRaw).apiKeyEncoded, 'base64').toString('utf8')
+    await assertEqual(decoded, fake, 'auth.json round-trip decodes to the stored key')
+  })
+
+  await check('POST /key replaces, then clear deletes (credentials/env untouched)', async () => {
+    const first = 'fake-key-AAAA1111'
+    const second = 'fake-key-BBBB2222'
+    const res = fakeRes()
+    await keyRoute.handler(fakeReq('POST', JSON.stringify({ apiKey: first })), res)
+    await assertEqual(JSON.parse(res.body).maskedHint, '1111', 'first key tail')
+    const res2 = fakeRes()
+    await keyRoute.handler(fakeReq('POST', JSON.stringify({ apiKey: second })), res2)
+    await assertEqual(JSON.parse(res2.body).maskedHint, '2222', 'replaced key tail')
+    const res3 = fakeRes()
+    await keyRoute.handler(fakeReq('POST', JSON.stringify({ clear: true })), res3)
+    const payload = JSON.parse(res3.body)
+    await assertEqual(payload.ok, true, 'ok')
+    await assertEqual(payload.hasKey, false, 'cleared')
+    if (fs.existsSync(path.join(smokeHome, 'quota-pill', 'auth.json'))) throw new Error('auth.json survived clear')
+    const res4 = fakeRes()
+    await keyRoute.handler(fakeReq('DELETE'), res4)
+    await assertEqual(res4.statusCode, 405, 'non-GET/POST rejected')
   })
 
   const res6 = fakeRes()
@@ -214,7 +273,7 @@ if (process.argv.includes('--smoke')) {
   })
 
   await check('gateway settings route persists and re-applies (SMOKE: no listener)', async () => {
-    const gatewayRoute = routes.find((r) => r.path === '/dsh-zhipu-status/gateway')
+    const gatewayRoute = routes.find((r) => r.path === '/dsh-quota-pill/gateway')
     if (!gatewayRoute) throw new Error('gateway route missing')
     const res = fakeRes()
     await gatewayRoute.handler(fakeReq('GET'), res)
@@ -237,7 +296,7 @@ if (process.argv.includes('--smoke')) {
     await assertEqual(after.chain.length, 1, 'chain persisted')
     await assertEqual(after.chain[0].hasKey, true, 'hasKey flag')
     if (JSON.stringify(after).includes('sk-smoke-fake')) throw new Error('apiKey leaked in the POST response')
-    const saved = JSON.parse(fs.readFileSync(path.join(smokeHome, 'zhipu-status', 'gateway.json'), 'utf8'))
+    const saved = JSON.parse(fs.readFileSync(path.join(smokeHome, 'quota-pill', 'gateway.json'), 'utf8'))
     await assertEqual(saved.enabled, true, 'gateway.json enabled')
     await assertEqual(saved.chain[0].apiKey, 'sk-smoke-fake', 'key persisted host-side only')
     await assertEqual(after.status.listening, false, 'SMOKE still binds nothing')
