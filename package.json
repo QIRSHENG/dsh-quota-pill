@@ -24,7 +24,10 @@
     "build": "node scripts/build.mjs",
     "smoke": "node scripts/build.mjs --smoke",
     "smoke:gateway": "node scripts/gateway-smoke.mjs",
-    "smoke:lifecycle": "node scripts/lifecycle-check.mjs"
+    "smoke:lifecycle": "node scripts/lifecycle-check.mjs",
+    "smoke:client": "node scripts/client-check.mjs",
+    "smoke:stream": "node scripts/stream-check.mjs",
+    "verify": "node scripts/build.mjs --smoke && node scripts/gateway-smoke.mjs && node scripts/stream-check.mjs && node scripts/lifecycle-check.mjs && node scripts/client-check.mjs"
   },
   "engines": {
     "node": ">=20",

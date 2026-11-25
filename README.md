@@ -20,6 +20,37 @@ DeepSeek Harness（DSH）插件：把**智谱（GLM）Token 资源包余量与�
   - 状态行：数据模式、上次成功时间、降频状态
 - 🔁 **自动降级链**：资源包余量 → Coding Plan 订阅窗口 → 可读的降级态（见下表）
 - 🧩 **provider 注册表架构**：数据源层按 provider 注册表组织（域名匹配 / 端点 / 鉴权 / 解析 / 到期字段各为一个条目字段），智谱是 v1 的第一条；加新 provider 只需加注册表条目，不改核心
+- 🔀 **本地多上游网关**（可选，默认关闭）：在本机开一个 OpenAI 兼容入口，把 DSH 的一条 provider 变成一个「按你排序的上游链路」，命中 401/402/403/429、智谱业务包络鉴权错误或 5xx 时自动切下一条
+
+## 本地多上游网关
+
+用途：DSH 里一个自定义 provider 只能填一个 base URL + 一个 key。想在**智谱额度用尽时自动换到 DeepSeek / 硅基流动 / OpenRouter**，就让它指向本插件的本地网关。
+
+设置 → **智谱多上游网关**：
+
+| 项 | 说明 |
+|---|---|
+| 启用本地网关 | 在 `127.0.0.1:<port>` 上监听；默认端口 `18434`，被占用时状态行会提示换端口 |
+| 上游链路 | 按顺序排列的条目（名称 / Base URL / 模型 / key / 鉴权方式 / 包络类型），可上下移、禁用、删除；也可一键加全部预设 |
+| 上游超时 | 10–600 秒，默认 120 秒（既管首字节，也管流式空闲间隔） |
+| 冷却时长 | 硬失败的上游暂停多久，默认 5 分钟 |
+| 低余量跳过 | 智谱余量低于该值时跳过该上游（联动上方资源包轮询数据）；0 = 关闭 |
+
+**切换规则**：HTTP 401/402/403/429 → 立即硬失败；5xx 或网络错误 → 软失败，连续 2 次转硬失败；智谱风格的 `{code:401}` 业务包络（HTTP 200 里报鉴权失败）→ 硬失败。**400/404/422 这类请求本身的错误不会切换**，直接以归一化错误体返回（`error.type=upstream_error`）。链路全挂时返回 `502 / gateway_upstream_error / chain_exhausted`。
+
+**流式**：首字节写出前都可以切换；一旦开始转发 SSE，上游中断只是结束本次响应并记一次软失败（不会把半截输出换成另一个上游）。
+
+**接入 DSH**：
+
+```text
+Base URL：http://127.0.0.1:18434/v1
+模型：auto-router
+API key：任意占位值（网关不校验；真实上游 key 只存在下面的 gateway.json 里）
+```
+
+`GET /v1/models` 只返回 `auto-router` 一个条目，工具调用（`tool_calls`）原样透传。
+
+**密钥位置**：上游 key 只写在 `$DSH_HOME/zhipu-status/gateway.json`（与缓存同一信任域，文件权限与 DSH 家目录一致）。设置接口只回 `hasKey: true/false`，**任何接口和日志都不会回传 key**；页面上已保存的 key 显示为掩码，留空即保持不变。
 
 ## 安装
 
@@ -88,8 +119,13 @@ dshmarket 的安装源限制在其 registry（awesome-dsh-plugin）收录范围�
 
 ```sh
 node scripts/build.mjs          # 语法 + 清单检查
-node scripts/build.mjs --smoke  # + mock 上下文冒烟（路由/设置/栅栏/注册表/包络分类）
+node scripts/build.mjs --smoke  # + mock 上下文冒烟（路由/设置/栅栏/注册表/包络分类/网关配置）
+node scripts/gateway-smoke.mjs  # 网关冒烟：/v1/models、假 key 双上游切换、归一化错误体、key 不外泄
+node scripts/stream-check.mjs   # 流式透传 / 流式切换 / JSON→SSE / tool_calls 透传 / 400 不切换
+node scripts/lifecycle-check.mjs# 真实起停：start 绑定 → POST applyConfig() 重绑 → dispose 释放
+node scripts/client-check.mjs   # 客户端 bundle 渲染：pill + 两个设置页 + 保存回传
 node scripts/probe.mjs          # 假 key 真实链路探测（期待 auth-error；无密钥参与）
+npm run verify                  # 上面除 probe 外全部串跑（CI 用这个）
 ```
 
 零运行时依赖；宿主侧只需 Node ≥ 20 内置 fetch。目录结构：
@@ -97,15 +133,17 @@ node scripts/probe.mjs          # 假 key 真实链路探测（期待 auth-error
 ```text
 package.json        # dsh.bundle.patch + dsh.client 声明（platform: web）
 cordis.patch.yml    # 宿主插件挂载行（id: dsh-zhipu-status）
-lib/index.js        # 宿主：轮询 + 路由 + 缓存 + 调试日志
+lib/index.js        # 宿主：轮询 + 路由 + 缓存 + 调试日志 + 网关生命周期挂载
+lib/gateway.js      # 宿主：OpenAI 兼容本地网关（链路切换 + 配置归一化/脱敏）
 lib/providers.js    # provider 注册表（v2 扩展缝）
-lib/client.js       # 浏览器：composer dock pill + 设置 section + 图标
-scripts/            # build.mjs / smoke / probe.mjs
+lib/client.js       # 浏览器：composer dock pill + 两个设置 section + 图标
+scripts/            # build.mjs + 四个验证脚本 + probe.mjs
 ```
 
 ## Roadmap
 
 - **v2: 多 provider 支持**（DeepSeek `/user/balance`、硅基流动 `/v1/user/info`、OpenRouter `/api/v1/key`；贴控制台 URL 自动按域名识别 provider）——数据源层已按 provider 注册表预留，只需新增条目。
+- 网关侧：链路健康度可视化（每上游的成功率/最近错误）、按模型名分流到指定上游。
 - 低余额阈值高亮的视觉打磨、到期字段适配（等智谱响应里出现明确字段）。
 
 ## 免责声明

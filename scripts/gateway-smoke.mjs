@@ -218,6 +218,20 @@ await check('mergeGatewayConfig keeps the stored key when a patch omits apiKey',
   assert.equal(merged.chain[0].apiKey, FAKE_KEY_A, 'stored key must survive a keyless patch')
 })
 
+await check('an empty apiKey (what the settings page always sends) also keeps the stored key', async () => {
+  // The page can never read a key back, so it round-trips an empty string for
+  // every entry that already has one — that must not wipe the key.
+  const merged = mergeGatewayConfig(config, {
+    chain: [{ id: 'a', baseUrl: `http://127.0.0.1:${upstreamA.port}`, model: 'model-a', apiKey: '' }],
+  })
+  assert.equal(merged.chain[0].apiKey, FAKE_KEY_A, 'empty apiKey wiped the stored key')
+  // A genuinely new key still wins.
+  const replaced = mergeGatewayConfig(config, {
+    chain: [{ id: 'a', baseUrl: `http://127.0.0.1:${upstreamA.port}`, model: 'model-a', apiKey: 'rotated-key' }],
+  })
+  assert.equal(replaced.chain[0].apiKey, 'rotated-key', 'a provided key must replace the stored one')
+})
+
 await check('applyConfig() rebinds the listener (old port released, new one live)', async () => {
   const beforePort = gateway.status().port
   gateway.applyConfig()

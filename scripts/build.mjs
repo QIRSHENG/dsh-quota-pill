@@ -41,7 +41,7 @@ check('package.json parses, version + dsh manifest present', () => {
   if (packageJson.dsh.client.platform !== 'web') throw new Error('client platform must be web')
 })
 
-for (const file of ['lib/index.js', 'lib/client.js', 'lib/providers.js', 'lib/gateway.js', 'scripts/gateway-smoke.mjs', 'scripts/lifecycle-check.mjs', 'scripts/client-check.mjs']) {
+for (const file of ['lib/index.js', 'lib/client.js', 'lib/providers.js', 'lib/gateway.js', 'scripts/gateway-smoke.mjs', 'scripts/lifecycle-check.mjs', 'scripts/client-check.mjs', 'scripts/stream-check.mjs']) {
   await check(`syntax: ${file}`, () => {
     const result = spawnSync(process.execPath, ['--check', path.join(ROOT, file)], { encoding: 'utf8' })
     if (result.status !== 0) throw new Error(result.stderr || `exit ${result.status}`)
@@ -207,6 +207,8 @@ if (process.argv.includes('--smoke')) {
     const merged = mergeGatewayConfig(raw, { chain: [{ id: 'a', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-plus' }] })
     await assertEqual(merged.chain[0].apiKey, 'sk-fake-secret', 'keyless patch keeps the stored key')
     await assertEqual(merged.chain[0].model, 'glm-4-plus', 'patch applied')
+    const emptied = mergeGatewayConfig(raw, { chain: [{ id: 'a', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-plus', apiKey: '' }] })
+    await assertEqual(emptied.chain[0].apiKey, 'sk-fake-secret', 'empty apiKey keeps the stored key (page round-trip)')
     await assertEqual(GATEWAY_PRESETS.length >= 4, true, 'presets present')
     await assertEqual(normalizeGatewayConfig(null).enabled, false, 'empty config stays disabled')
   })
