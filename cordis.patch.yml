@@ -1,0 +1,9 @@
+# dsh-zhipu-status —— DSH bundle patch
+# 插件挂载声明：DSH 启动时按 bundle 层栈叠加各插件 patch，
+# 本行把宿主侧轮询/路由服务插入 profile 配置树。
+# 安装（web profile）：dsh plugin --profile web add dsh-zhipu-status
+# 本地开发安装：dsh plugin --profile web add link:<本目录绝对路径>
+
+- insert:
+    - id: dsh-zhipu-status
+      name: dsh-zhipu-status

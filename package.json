@@ -1,0 +1,64 @@
+{
+  "name": "dsh-zhipu-status",
+  "version": "0.1.0",
+  "description": "Zhipu (GLM) token resource-pack balance as a DSH composer-dock pill, with a settings section. Data layer is a provider registry (v1 ships Zhipu only).",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "icon": "./icon.svg",
+  "files": [
+    "lib/index.js",
+    "lib/providers.js",
+    "lib/client.js",
+    "icon.svg",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "smoke": "node scripts/build.mjs --smoke"
+  },
+  "engines": {
+    "node": ">=20",
+    "dsh": ">=0.2.2-0 <0.3.0"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "zhipu",
+    "glm",
+    "balance",
+    "quota",
+    "status-bar"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OWNER/dsh-zhipu-status.git"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    }
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-renderer"
+      ],
+      "platform": "web"
+    }
+  }
+}
