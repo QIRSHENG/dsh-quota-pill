@@ -71,6 +71,30 @@ API key：任意占位值（网关不校验；真实上游 key 只存在下面�
 
 **密钥位置**：上游 key 只写在 `$DSH_HOME/quota-pill/gateway.json`（与缓存同一信任域，文件权限与 DSH 家目录一致）。设置接口只回 `hasKey: true/false`，**任何接口和日志都不会回传 key**；页面上已保存的 key 显示为掩码，留空即保持不变。
 
+### 上游实测备注（2026-11-26）
+
+- **阿里云百炼（DashScope）**：按量付费 key（`sk-ws-` 开头的三段式格式）。已入链：
+  `baseUrl=https://dashscope.aliyuncs.com/compatible-mode/v1`、`model=qwen-plus`、`authStyle=bearer`、`envelope=none`。
+  额度口径是**每个模型独立的 100 万 token 免费额度**（70+ 可用模型 ≈ 7000 万+ token 总量，有效期 90 天，
+  自开通起算）。百炼没有 key 级余额 API（`/api/v1/recharge/recharge-balance/query` 已下线，多路径实测 404；
+  官方口径仅控制台可查），所以网关的「低余量跳过」对百炼条目天然不生效（envelope=none 不参与余量联动）。
+  qwen-plus 的 1M 额度烧完后，网关 failover 会切下一家；**换模型名 = 换一个新的 1M 额度池**——在网关页把该
+  条目的模型改成另一个未用过的模型即可。同口径候选：`qwen-flash`、`qwen-max`、`qwen3-coder-flash`
+  （均在实测模型清单 191 个内），1M/模型的量级下 qwen-plus 甚至 qwen-max 都够撑多轮复杂任务。
+
+- **硅基流动（SiliconFlow CN）**：`sk-rl…ubqz` key 有效（chat 终验 HTTP 200），已入链第二条（id `siliconflow-xing`，
+  `baseUrl=https://api.siliconflow.cn/v1`、`model=XingChenAGI/Xing4.0-29B`、`authStyle=bearer`、`envelope=none`），
+  但**默认 `enabled:false`**：模型列表已无 `/Free` 后缀（92 个模型全计费），Xing4.0-29B 是计费模型，failover
+  触及会真实扣费。链上实际只走百炼；这条留作用户手动启用的备用位（设置面板网关 tab 打开即可）。用户明确
+  「实在没钱」，故免费档 key 到手也不放计费档上链。
+
+## key 归属与处置清单（探针结论，2026-11-26）
+
+| key 形态 | 归属判定 | 探针结果 | 处置 |
+|---|---|---|---|
+| `AQ.` 前缀（53 位、单点分隔） | Google AI Studio 新版 Authentication Key | `generativelanguage.googleapis.com` 连接层失败（本机无代理，直连不通） | 暂不入链，待可用代理环境再探（x-goog-api-key 头或 ?key= 均可） |
+| `sk-rl…ubqz`（硅基流动 CN 站） | 有效已入链（key 从控制台复制、未删除）；CN 站 `/v1/models` 端点需鉴权，无鉴权 401「Token is invalid」、带 key 200 实证；chat 终验 `XingChenAGI/Xing4.0-29B` HTTP 200（max_tokens=5） | 国际站 401 仅说明 key 归属 CN 站；CN 站 `user/info` 已 410 弃用；**免费档已缩水，模型列表无 `/Free` 后缀，Xing4.0-29B 为计费模型** | 有效已入链但默认禁用（failover 触及会真实扣费；用户接受付费可自行在设置面板启用） |
+
 ## 安装
 
 > 目录名说明：本仓库曾用包名 `dsh-zhipu-status`，现包名为 `dsh-quota-pill`（仓库与功能已中性化）。本地 link 安装沿用历史目录 `E:\DeepSeek\dsh-zhipu-status`，包名以 package.json 为准。
